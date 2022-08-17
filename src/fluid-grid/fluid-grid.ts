@@ -32,13 +32,13 @@ import { Pointer } from "./WebGL/Pointer";
 
 const config = {
   SIM_RESOLUTION: 128, // default 128
-  DISPLAY_RESOLUTION: 512, // default 1024
-  DENSITY_DISSIPATION: 20, // default 1
-  VELOCITY_DISSIPATION: 0.01,// default .2
+  DISPLAY_RESOLUTION: 1024, // default 1024
+  DENSITY_DISSIPATION: 1, // default 1
+  VELOCITY_DISSIPATION: 0.2,// default .2
   PRESSURE: 0.8, // default .8
   PRESSURE_ITERATIONS: 20, // default 20
   CURL: 30, // default 30
-  SPLAT_RADIUS: 0.5, //default 0.25
+  SPLAT_RADIUS: 0.25, //default 0.25
   SPLAT_FORCE: 6000 //default 6000
 }
 
@@ -113,7 +113,7 @@ const createFrameBuffers = (gl: WebGLRenderingContext, ext) => {
 
   // init rendering FBO
   const displayResolution = getResolution(gl, config.DISPLAY_RESOLUTION);
-  const displayFBO = createDoubleFBO(gl, displayResolution.width, displayResolution.height, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+  const displayFBO = createDoubleFBO(gl, displayResolution.width, displayResolution.height, rgba.internalFormat, rgba.format, texType, filtering);
 
   return {
     displayFBO,
@@ -132,13 +132,9 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   // for rendering
   const baseVertexShader = compileShader(gl, gl.VERTEX_SHADER, BASE_VERT, []);
-  const noiseShader = compileShader(gl, gl.FRAGMENT_SHADER, NOISE_FRAG, []);
-  const pixelateShader = compileShader(gl, gl.FRAGMENT_SHADER, PIXELATE_FRAG, []);
   const shapeShader = compileShader(gl, gl.FRAGMENT_SHADER, SHAPE_FRAG, []);
   const displayShader = compileShader(gl, gl.FRAGMENT_SHADER, DISPLAY_FRAG, []);
 
-  const noiseProgram = new Program(gl, baseVertexShader, noiseShader);
-  const pixelateProgram = new Program(gl, baseVertexShader, pixelateShader);
   const shapeProgram = new Program(gl, baseVertexShader, shapeShader);
 
   // for final output
@@ -185,6 +181,37 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   const Renderer = createRenderer(gl);
 
+  function generateColor() {
+    let c = HSVtoRGB(Math.random(), 1.0, 1.0);
+    c.r *= 0.15;
+    c.g *= 0.15;
+    c.b *= 0.15;
+    return c;
+  }
+
+  function HSVtoRGB(h, s, v) {
+    let r, g, b, i, f, p, q, t;
+    i = Math.floor(h * 6);
+    f = h * 6 - i;
+    p = v * (1 - s);
+    q = v * (1 - f * s);
+    t = v * (1 - (1 - f) * s);
+
+    switch (i % 6) {
+      case 0: r = v, g = t, b = p; break;
+      case 1: r = q, g = v, b = p; break;
+      case 2: r = p, g = v, b = t; break;
+      case 3: r = p, g = q, b = v; break;
+      case 4: r = t, g = p, b = v; break;
+      case 5: r = v, g = p, b = q; break;
+    }
+
+    return {
+      r,
+      g,
+      b
+    };
+  }
 
 
   function correctRadius(radius: number) {
@@ -207,6 +234,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   function splatPointer(pointer: Pointer) {
     let dx = pointer.deltaX * config.SPLAT_FORCE;
     let dy = pointer.deltaY * config.SPLAT_FORCE;
+
     splat(pointer.texcoordX, pointer.texcoordY, dx, dy);
   }
 
@@ -225,7 +253,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     velocityFBO.swap();
 
     gl.uniform1i(splatProgram.uniforms.uTarget, displayFBO.read.attach(0));
-    gl.uniform3f(splatProgram.uniforms.color, 0.5, 0.5, 1.0);
+    gl.uniform3f(splatProgram.uniforms.color, 0.15, 0.15, 0.15);
     Renderer.renderToFrameBuffer(displayFBO.write);
     displayFBO.swap();
   }
@@ -248,20 +276,19 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   //   splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
   // }, 1000)
 
-  const shouldShowFluidSimulation = state(false);
+  const shouldShowFluidSimulation = state(true);
 
   const render = () => {
 
     applyInputs();
 
-    const delta = timer.getDeltaMillisec() / 1000 / 20;
+    const delta = timer.getDeltaMillisec() / 1000;
 
     gl.disable(gl.BLEND);
 
     curlProgram.bind();
     gl.uniform2f(curlProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
     gl.uniform1i(curlProgram.uniforms.uVelocity, velocityFBO.read.attach(0));
-
     Renderer.renderToFrameBuffer(curlFBO);
 
     vorticityProgram.bind();
@@ -270,7 +297,6 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     gl.uniform1i(vorticityProgram.uniforms.uCurl, curlFBO.attach(1));
     gl.uniform1f(vorticityProgram.uniforms.curl, config.CURL);
     gl.uniform1f(vorticityProgram.uniforms.dt, delta);
-
     Renderer.renderToFrameBuffer(velocityFBO.write);
     velocityFBO.swap();
 
@@ -300,9 +326,8 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
     gradientSubtractProgram.bind();
     gl.uniform2f(gradientSubtractProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
-    gl.uniform1i(gradientSubtractProgram.uniforms.uPressure, velocityFBO.read.attach(0));
+    gl.uniform1i(gradientSubtractProgram.uniforms.uPressure, pressureFBO.read.attach(0));
     gl.uniform1i(gradientSubtractProgram.uniforms.uVelocity, velocityFBO.read.attach(1));
-
     Renderer.renderToFrameBuffer(velocityFBO.write);
     velocityFBO.swap();
 

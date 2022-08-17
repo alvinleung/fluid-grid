@@ -29,7 +29,9 @@ export class Pointer {
     this.texcoordY = 1.0 - posY / canvas.height;
     this.deltaX = correctDeltaX(canvas, this.texcoordX - this.prevTexcoordX);
     this.deltaY = correctDeltaY(canvas, this.texcoordY - this.prevTexcoordY);
+
     this.moved = Math.abs(this.deltaX) > 0 || Math.abs(this.deltaY) > 0;
+
   }
 }
 
