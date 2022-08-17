@@ -31,14 +31,14 @@ import { createTextureFromCanvas } from "./WebGL/Texture";
 import { Pointer } from "./WebGL/Pointer";
 
 const config = {
-  SIM_RESOLUTION: 64, // default 128
-  DISPLAY_RESOLUTION: 612, // default 1024
+  SIM_RESOLUTION: 128, // default 128
+  DISPLAY_RESOLUTION: 512, // default 1024
   DENSITY_DISSIPATION: 20, // default 1
-  VELOCITY_DISSIPATION: 0.7,// default .2
+  VELOCITY_DISSIPATION: 0.01,// default .2
   PRESSURE: 0.8, // default .8
   PRESSURE_ITERATIONS: 20, // default 20
   CURL: 30, // default 30
-  SPLAT_RADIUS: 0.25, //default 0.25
+  SPLAT_RADIUS: 0.5, //default 0.25
   SPLAT_FORCE: 6000 //default 6000
 }
 

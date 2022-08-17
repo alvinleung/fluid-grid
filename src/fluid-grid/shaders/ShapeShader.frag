@@ -20,9 +20,9 @@ uniform sampler2D uTextureDotShape;
 varying vec2 vUv;
 
 
-float THRESHOLD_1 = .2;
+float THRESHOLD_1 = .1;
 float THRESHOLD_2 = .5;
-float THRESHOLD_3 = .7;
+float THRESHOLD_3 = .97;
 
 float drawLine (vec2 p1, vec2 p2, vec2 uv, float a)
 {
@@ -42,9 +42,7 @@ float drawLine (vec2 p1, vec2 p2, vec2 uv, float a)
 }
 
 void main() {
-  // gl_FragColor = vec4(0.1,1.0,.4,1.0);;
-
-  float pixels = 1080.0;
+  float pixels = 1920.0;
   float dx = 15.0 * (1.0 / pixels);
   float dy = 10.0 * (1.0 / pixels);
   vec2 coord = vec2(dx * floor(vUv.x / dx), 
@@ -53,30 +51,16 @@ void main() {
   vec4 fluidPixelColour = texture2D(uTexture, coord);
   float fluidValue = fluidPixelColour.x;
 
+  gl_FragColor = vec4(vec3(0.0), 1.0);
 
-  // gl_FragColor = lineShapeColour;
-
-  // gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-
-  if (fluidValue < THRESHOLD_1) {
-
-    gl_FragColor = vec4(vec3(0.0), 1.0);
-    return;
-  }
-
-  vec4 dotShapeColour = texture2D(uTextureDotShape, vUv * 110.);
-  gl_FragColor = vec4(vec3(dotShapeColour), 1.0);
-
-  if (fluidValue < THRESHOLD_2) {
+  if (fluidValue > THRESHOLD_2) {
     vec4 dotShapeColour = texture2D(uTextureDotShape, vUv * 110.);
     gl_FragColor = vec4(vec3(dotShapeColour), 1.0);
-    // return;
   }
 
-  if (fluidValue < THRESHOLD_3) {
-    // return;
-    vec4 lineShapeColour = texture2D(uTextureLineShape, vUv * 110.);
-    gl_FragColor = vec4(vec3(lineShapeColour), 1.0);
+  if (fluidValue > THRESHOLD_3) {
+    vec4 dotShapeColour = texture2D(uTextureLineShape, vUv * 110.);
+    gl_FragColor = vec4(vec3(dotShapeColour), 1.0);
   }
   
 }
