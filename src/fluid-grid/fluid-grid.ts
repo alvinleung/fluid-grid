@@ -34,11 +34,11 @@ const config = {
   SIM_RESOLUTION: 128, // default 128
   DISPLAY_RESOLUTION: 1024, // default 1024
   DENSITY_DISSIPATION: 1, // default 1
-  VELOCITY_DISSIPATION: 0.,// default .2
+  VELOCITY_DISSIPATION: 0.2,// default .2
   PRESSURE: 0.8, // default .8
   PRESSURE_ITERATIONS: 10, // default 20
   CURL: 10, // default 30
-  SPLAT_RADIUS: .9, //default 0.25
+  SPLAT_RADIUS: .6, //default 0.25
   SPLAT_FORCE: 6000 //default 6000
 }
 

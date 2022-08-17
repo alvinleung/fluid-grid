@@ -21,8 +21,8 @@ varying vec2 vUv;
 
 
 float THRESHOLD_1 = .1;
-float THRESHOLD_2 = .5;
-float THRESHOLD_3 = .97;
+float THRESHOLD_2 = .3;
+float THRESHOLD_3 = .999;
 
 float drawLine (vec2 p1, vec2 p2, vec2 uv, float a)
 {
