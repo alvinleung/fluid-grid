@@ -19,7 +19,7 @@ import FLUID_PRESSURE_FRAG from "./shaders/fluid/fluidPressure.frag";
 import FLUID_SPLAT_FRAG from "./shaders/fluid/fluidSplat.frag";
 import FLUID_VORTICITY_FRAG from "./shaders/fluid/fluidVorticity.frag";
 import DISPLAY_FRAG from "./shaders/DisplayShader.frag";
-import COLOR_FRAG from "./shaders/fluid/Color.frag";
+import COLOR_FRAG from "./shaders/fluid/color.frag";
 
 
 import { compileShader, createProgram, Program } from "./WebGL/Program";
@@ -34,11 +34,11 @@ const config = {
   SIM_RESOLUTION: 128, // default 128
   DISPLAY_RESOLUTION: 1024, // default 1024
   DENSITY_DISSIPATION: 1, // default 1
-  VELOCITY_DISSIPATION: 0.2,// default .2
+  VELOCITY_DISSIPATION: 0.,// default .2
   PRESSURE: 0.8, // default .8
-  PRESSURE_ITERATIONS: 20, // default 20
-  CURL: 30, // default 30
-  SPLAT_RADIUS: 0.25, //default 0.25
+  PRESSURE_ITERATIONS: 10, // default 20
+  CURL: 10, // default 30
+  SPLAT_RADIUS: .9, //default 0.25
   SPLAT_FORCE: 6000 //default 6000
 }
 
@@ -253,7 +253,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     velocityFBO.swap();
 
     gl.uniform1i(splatProgram.uniforms.uTarget, displayFBO.read.attach(0));
-    gl.uniform3f(splatProgram.uniforms.color, 0.15, 0.15, 0.15);
+    gl.uniform3f(splatProgram.uniforms.color, 0.5, 0.5, 0.5);
     Renderer.renderToFrameBuffer(displayFBO.write);
     displayFBO.swap();
   }
@@ -272,11 +272,11 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     }
   }
 
-  // setInterval(() => {
-  //   splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
-  // }, 1000)
+  setInterval(() => {
+    splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
+  }, 1000)
 
-  const shouldShowFluidSimulation = state(true);
+  const shouldShowFluidSimulation = state(false);
 
   const render = () => {
 
