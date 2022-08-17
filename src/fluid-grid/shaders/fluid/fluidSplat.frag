@@ -1,12 +1,16 @@
 precision highp float;
 precision highp sampler2D;
+
 varying vec2 vUv;
+
 uniform sampler2D uTarget;
 uniform float aspectRatio;
 uniform vec3 color;
 uniform vec2 point;
 uniform float radius;
-void main () {
+
+
+void main() {
     vec2 p = vUv - point.xy;
     p.x *= aspectRatio;
     vec3 splat = exp(-dot(p, p) / radius) * color;

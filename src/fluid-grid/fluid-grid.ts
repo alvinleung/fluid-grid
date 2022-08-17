@@ -30,11 +30,16 @@ import { createRenderer } from "./WebGL/Renderer";
 import { createTextureFromCanvas } from "./WebGL/Texture";
 import { Pointer } from "./WebGL/Pointer";
 
-interface RenderInfo {
-  canvas: HTMLCanvasElement,
-  gl: WebGLRenderingContext,
-  delta: number,
-  elapsedTime: number
+const config = {
+  SIM_RESOLUTION: 64, // default 128
+  DISPLAY_RESOLUTION: 612, // default 1024
+  DENSITY_DISSIPATION: 20, // default 1
+  VELOCITY_DISSIPATION: 0.7,// default .2
+  PRESSURE: 0.8, // default .8
+  PRESSURE_ITERATIONS: 20, // default 20
+  CURL: 30, // default 30
+  SPLAT_RADIUS: 0.25, //default 0.25
+  SPLAT_FORCE: 6000 //default 6000
 }
 
 function getResolution(gl: WebGLRenderingContext, resolution: number) {
@@ -89,9 +94,8 @@ const createDotShape = () => {
 }
 
 
-const SIM_RESOLUTION = 128;
 const createFrameBuffers = (gl: WebGLRenderingContext, ext) => {
-  const simRes = getResolution(gl, SIM_RESOLUTION);
+  const simRes = getResolution(gl, config.SIM_RESOLUTION);
 
   const texType = ext.halfFloatTexType;
   const rgba = ext.formatRGBA;
@@ -108,9 +112,8 @@ const createFrameBuffers = (gl: WebGLRenderingContext, ext) => {
   const pressureFBO = createDoubleFBO(gl, simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
 
   // init rendering FBO
-  const displayWidth = window.innerWidth;
-  const displayHeight = window.innerHeight;
-  const displayFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+  const displayResolution = getResolution(gl, config.DISPLAY_RESOLUTION);
+  const displayFBO = createDoubleFBO(gl, displayResolution.width, displayResolution.height, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
 
   return {
     displayFBO,
@@ -182,16 +185,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   const Renderer = createRenderer(gl);
 
-  let config = {
-    SIM_RESOLUTION: 128,
-    DENSITY_DISSIPATION: 1,
-    VELOCITY_DISSIPATION: 0.2,
-    PRESSURE: 0.8,
-    PRESSURE_ITERATIONS: 20,
-    CURL: 50,
-    SPLAT_RADIUS: 0.25,
-    SPLAT_FORCE: 6000
-  }
+
 
   function correctRadius(radius: number) {
     let aspectRatio = canvas.width / canvas.height;
@@ -217,6 +211,10 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   }
 
   function splat(x, y, dx, dy) {
+    if (x === undefined || y === undefined || dx === undefined || dy === undefined) {
+      return;
+    }
+
     splatProgram.bind();
     gl.uniform1i(splatProgram.uniforms.uTarget, velocityFBO.read.attach(0));
     gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
@@ -225,13 +223,17 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     gl.uniform1f(splatProgram.uniforms.radius, correctRadius(config.SPLAT_RADIUS / 100.0));
     Renderer.renderToFrameBuffer(velocityFBO.write);
     velocityFBO.swap();
+
+    gl.uniform1i(splatProgram.uniforms.uTarget, displayFBO.read.attach(0));
+    gl.uniform3f(splatProgram.uniforms.color, 0.5, 0.5, 1.0);
+    Renderer.renderToFrameBuffer(displayFBO.write);
+    displayFBO.swap();
   }
 
   const pointer = new Pointer();
   window.addEventListener("mousemove", (e) => {
-    let posX = scaleByPixelRatio(e.clientX);
-    let posY = scaleByPixelRatio(e.clientY);
-
+    let posX = (e.clientX);
+    let posY = (e.clientY);
     pointer.update(canvas, posX, posY);
   })
 
@@ -242,11 +244,17 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     }
   }
 
+  // setInterval(() => {
+  //   splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
+  // }, 1000)
+
+  const SHOW_FLUID_SIMULATION = false;
+
   const render = () => {
 
     applyInputs();
 
-    const delta = timer.getDeltaMillisec() / 1000;
+    const delta = timer.getDeltaMillisec() / 1000 / 20;
 
     gl.disable(gl.BLEND);
 
@@ -277,7 +285,6 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     clearProgram.bind();
     gl.uniform1i(clearProgram.uniforms.uTexture, pressureFBO.read.attach(0));
     gl.uniform1f(clearProgram.uniforms.value, config.PRESSURE);
-
     Renderer.renderToFrameBuffer(pressureFBO.write);
     pressureFBO.swap();
 
@@ -321,24 +328,28 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     Renderer.renderToFrameBuffer(displayFBO.write);
     displayFBO.swap();
 
+    // colorProgram.bind();
+    // gl.uniform4f(colorProgram.uniforms.color, 0, 1, 0, 1);
+
+
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.BLEND);
+
+    // render blank background
     colorProgram.bind();
-    gl.uniform4f(colorProgram.uniforms.color, 0, 1, 0, 1);
+    gl.uniform4f(colorProgram.uniforms.color, .0, .0, .0, 1);
 
     displayProgram.bind();
+    gl.uniform2f(displayProgram.uniforms.texelSize, 1.0 / window.innerWidth, 1.0 / window.innerHeight);
+    gl.uniform1i(displayProgram.uniforms.uTexture, displayFBO.read.attach(0));
+    Renderer.renderToFrameBuffer(displayFBO.write);
 
-
-    // noiseProgram.bind()
-    // gl.uniform1f(noiseProgram.uniforms.uTime, timer.getCurrentTime() / 1000);
-    // gl.uniform2fv(noiseProgram.uniforms.uResolution, [window.innerWidth, window.innerHeight]);
-    // gl.uniform2fv(noiseProgram.uniforms.uMouse, [mousePos.x, mousePos.y]);
-
-    // Renderer.renderToFrameBuffer(noiseFBO.write);
-    // noiseFBO.swap(); // flip it for the next stage in the pipeline
-
-    // shapeProgram.bind();
-    // gl.uniform1i(shapeProgram.uniforms.uTexture, noiseFBO.read.attach(0));
-    // gl.uniform1i(shapeProgram.uniforms.uTextureLineShape, lineTexture.attach(1));
-    // gl.uniform1i(shapeProgram.uniforms.uTextureDotShape, dotTexture.attach(2));
+    if (!SHOW_FLUID_SIMULATION) {
+      shapeProgram.bind();
+      gl.uniform1i(shapeProgram.uniforms.uTexture, displayFBO.read.attach(0));
+      gl.uniform1i(shapeProgram.uniforms.uTextureLineShape, lineTexture.attach(1));
+      gl.uniform1i(shapeProgram.uniforms.uTextureDotShape, dotTexture.attach(2));
+    }
 
     // render it to screen
     Renderer.renderToScreen();

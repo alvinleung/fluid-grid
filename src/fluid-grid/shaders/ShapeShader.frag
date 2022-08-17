@@ -59,19 +59,24 @@ void main() {
   // gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 
   if (fluidValue < THRESHOLD_1) {
-    vec4 lineShapeColour = texture2D(uTextureLineShape, vUv * 110.);
-    gl_FragColor = vec4(vec3(lineShapeColour), 1.0);
+
+    gl_FragColor = vec4(vec3(0.0), 1.0);
     return;
   }
+
+  vec4 dotShapeColour = texture2D(uTextureDotShape, vUv * 110.);
+  gl_FragColor = vec4(vec3(dotShapeColour), 1.0);
 
   if (fluidValue < THRESHOLD_2) {
     vec4 dotShapeColour = texture2D(uTextureDotShape, vUv * 110.);
     gl_FragColor = vec4(vec3(dotShapeColour), 1.0);
-    return;
+    // return;
   }
 
   if (fluidValue < THRESHOLD_3) {
     // return;
+    vec4 lineShapeColour = texture2D(uTextureLineShape, vUv * 110.);
+    gl_FragColor = vec4(vec3(lineShapeColour), 1.0);
   }
-  gl_FragColor = vec4(vec3(0.0), 1.0);
+  
 }
