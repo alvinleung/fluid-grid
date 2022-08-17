@@ -4,14 +4,22 @@
 
 import { createTimer } from "./utils";
 
-//@ts-ignore
 import BASE_VERT from "./shaders/BaseVertexShader.vert";
-//@ts-ignore
 import FLUID_FRAG from "./shaders/Fluid.frag";
-//@ts-ignore
 import SHAPE_FRAG from "./shaders/ShapeShader.frag";
-//@ts-ignore
 import PIXELATE_FRAG from "./shaders/Pixelate.frag";
+
+import COPY_FRAG from "./shaders/fluid/copy.frag";
+import CLEAR_FRAG from "./shaders/fluid/clear.frag";
+import FLUID_ADVECTION_FRAG from "./shaders/fluid/fluidAdvection.frag";
+import FLUID_CURL_FRAG from "./shaders/fluid/fluidCurl.frag";
+import FLUID_DIVERGENCE_FRAG from "./shaders/fluid/fluidDivergence.frag";
+import FLUID_GRADIENT_SUBTRACT_FRAG from "./shaders/fluid/fluidGradientSubtract.frag";
+import FLUID_PRESSURE_FRAG from "./shaders/fluid/fluidPressure.frag";
+import FLUID_SPLAT_FRAG from "./shaders/fluid/fluidSplat.frag";
+import FLUID_VORTICITY_FRAG from "./shaders/fluid/fluidVorticity.frag";
+
+
 
 import { compileShader, createProgram, Program } from "./WebGL/Program";
 import { Material } from "./WebGL/Material";
