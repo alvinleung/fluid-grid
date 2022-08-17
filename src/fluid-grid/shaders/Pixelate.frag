@@ -18,7 +18,14 @@ varying vec2 vUv;
 
 void main() {
     // gl_FragColor = vec4(0.1,1.0,.4,1.0);;
-    vec4 fluidPixelColour = texture2D(uTexture, vUv);
+
+    float pixels = 720.0;
+    float dx = 15.0 * (1.0 / pixels);
+    float dy = 10.0 * (1.0 / pixels);
+    vec2 coord = vec2(dx * floor(vUv.x / dx), 
+                      dy * floor(vUv.y / dy));
+
+    vec4 fluidPixelColour = texture2D(uTexture, coord);
     
     gl_FragColor = vec4(vec3(fluidPixelColour.x), 1.0);
 }

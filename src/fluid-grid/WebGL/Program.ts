@@ -1,11 +1,16 @@
+type Uniforms = {
+  [key: string]: any
+}
+
 export class Program {
   program: WebGLProgram;
-  uniforms: {};
+  uniforms: Uniforms;
   gl: WebGLRenderingContext;
 
   constructor(gl: WebGLRenderingContext, vertexShader, fragmentShader) {
     this.program = createProgram(gl, vertexShader, fragmentShader);
     this.uniforms = getUniforms(gl, this.program);
+    this.gl = gl;
   }
 
   bind() {

@@ -1,10 +1,10 @@
 precision highp float;
 attribute vec2 aPosition;
-varying vec2 vUv;
-varying vec2 vL;
-varying vec2 vR;
-varying vec2 vT;
-varying vec2 vB;
+varying vec2 vUv; // uv position
+varying vec2 vL; // left
+varying vec2 vR; // right
+varying vec2 vT; // top
+varying vec2 vB; // bottom
 uniform vec2 texelSize;
 
 void main () {

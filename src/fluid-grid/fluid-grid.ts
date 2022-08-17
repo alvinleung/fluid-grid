@@ -1,4 +1,6 @@
-//https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
+// Inspiration
+// https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
+// https://experiments.withgoogle.com/starfluid
 
 import * as twgl from "twgl.js";
 import { createTimer } from "./utils";
@@ -6,12 +8,17 @@ import { createTimer } from "./utils";
 //@ts-ignore
 import BASE_VERT from "./shaders/BaseVertexShader.vert";
 //@ts-ignore
+import FLUID_FRAG from "./shaders/Fluid.frag";
+//@ts-ignore
 import DISPLAY_FRAG from "./shaders/DisplayShader.frag";
+//@ts-ignore
+import PIXELATE_FRAG from "./shaders/Pixelate.frag";
 
-import { compileShader, Program } from "./WebGL/Program";
+import { compileShader, createProgram, Program } from "./WebGL/Program";
 import { Material } from "./WebGL/Material";
-import { createFBO, FrameBufferObject } from "./WebGL/FrameBufferObject";
+import { createDoubleFBO, createFBO, FrameBufferObject } from "./WebGL/FrameBufferObject";
 import { getWebGLContext } from "./WebGL/getContext";
+import { createRenderer } from "./WebGL/Renderer";
 
 interface RenderInfo {
   canvas: HTMLCanvasElement,
@@ -30,13 +37,22 @@ const render = ({
 
 export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
+  // ================================================================
+  // for user input
+
+
+  const mousePos = {
+    x: 0,
+    y: 0
+  }
+  window.addEventListener("mousemove", (e) => {
+    mousePos.x = e.clientX;
+    mousePos.y = e.clientY;
+  })
+
+  // ================================================================
+
   const { gl, ext } = getWebGLContext(canvas);
-
-  const baseVertexShader = compileShader(gl, gl.VERTEX_SHADER, BASE_VERT, []);
-
-  // const simpleProgram = new Program(gl, baseVertexShader, simpleFragShader);
-  const displayMaterial = new Material(gl, baseVertexShader, DISPLAY_FRAG);
-
   const texType = ext.halfFloatTexType;
   const rgba = ext.formatRGBA;
   const rg = ext.formatRG;
@@ -44,52 +60,48 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   const filtering = ext.supportLinearFiltering ? gl.LINEAR : gl.NEAREST;
 
 
+  const baseVertexShader = compileShader(gl, gl.VERTEX_SHADER, BASE_VERT, []);
+  const fluidShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_FRAG, []);
+  const pixelateShader = compileShader(gl, gl.FRAGMENT_SHADER, PIXELATE_FRAG, []);
+
+  const fluidProgram = new Program(gl, baseVertexShader, fluidShader);
+  const pixelateProgram = new Program(gl, baseVertexShader, pixelateShader);
+
+
+  // Create Frame Buffers
   const displayWidth = window.innerWidth;
   const displayHeight = window.innerHeight;
-  const displayFBO = createFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+  const fluidFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+  const pixelateFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+  // const displayFBO = createFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
 
   const timer = createTimer();
-
-  const blit = (() => {
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, -1, 1, 1, 1, 1, -1]), gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 0, 2, 3]), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
-
-    return (target?: FrameBufferObject, clear = false) => {
-      if (target == null) {
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      }
-      else {
-        gl.viewport(0, 0, target.width, target.height);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-      }
-      if (clear) {
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-      }
-      // CHECK_FRAMEBUFFER_STATUS();
-      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    }
-  })();
+  const Renderer = createRenderer(gl);
 
   const render = () => {
     // draw the display material
-    displayMaterial.bind();
-    gl.uniform1f(displayMaterial.uniforms.uTime, timer.getCurrentTime());
+    fluidProgram.bind()
+    gl.uniform1f(fluidProgram.uniforms.uTime, timer.getCurrentTime() / 1000);
+    gl.uniform2fv(fluidProgram.uniforms.uResolution, [window.innerWidth, window.innerHeight]);
+    gl.uniform2fv(fluidProgram.uniforms.uMouse, [mousePos.x, mousePos.y]);
 
-    displayMaterial.uniforms
+    Renderer.renderToFrameBuffer(fluidFBO.write);
+    fluidFBO.swap(); // flip it for the next stage in the pipeline
+
+    pixelateProgram.bind();
+    gl.uniform1i(pixelateProgram.uniforms.uTexture, fluidFBO.read.attach(0)); // insert the data to the program
+    // Renderer.renderToFrameBuffer(fluidFBO.write);
 
     // render it to screen
-    blit();
+    Renderer.renderToScreen();
+
     requestAnimationFrame(render);
   }
   requestAnimationFrame(render);
 
 }
+
+
 
 
 

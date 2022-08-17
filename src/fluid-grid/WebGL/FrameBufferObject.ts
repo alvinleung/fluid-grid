@@ -7,7 +7,7 @@ export interface FrameBufferObject {
   height: number;
   texelSizeX: number;
   texelSizeY: number;
-  attach: (id: number) => void
+  attach: (id: number) => number
 }
 
 export function createFBO(gl: WebGLRenderingContext, w: number, h: number, internalFormat, format, type, param): FrameBufferObject {
@@ -45,7 +45,17 @@ export function createFBO(gl: WebGLRenderingContext, w: number, h: number, inter
   };
 }
 
-export function createDoubleFBO(gl: WebGLRenderingContext, w: number, h: number, internalFormat, format, type, param) {
+export interface DoubleFrameBufferObject {
+  width: number;
+  height: number;
+  read: FrameBufferObject;
+  write: FrameBufferObject;
+  texelSizeX: number;
+  texelSizeY: number;
+  swap: () => void;
+}
+
+export function createDoubleFBO(gl: WebGLRenderingContext, w: number, h: number, internalFormat, format, type, param): DoubleFrameBufferObject {
   let fbo1 = createFBO(gl, w, h, internalFormat, format, type, param);
   let fbo2 = createFBO(gl, w, h, internalFormat, format, type, param);
 
