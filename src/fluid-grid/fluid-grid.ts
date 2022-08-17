@@ -2,7 +2,7 @@
 // https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
 // https://experiments.withgoogle.com/starfluid
 
-import { createTimer } from "./utils";
+import { createTimer, state } from "./utils";
 
 import BASE_VERT from "./shaders/BaseVertexShader.vert";
 import NOISE_FRAG from "./shaders/Fluid.frag";
@@ -248,7 +248,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   //   splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
   // }, 1000)
 
-  const SHOW_FLUID_SIMULATION = false;
+  const shouldShowFluidSimulation = state(false);
 
   const render = () => {
 
@@ -344,7 +344,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     gl.uniform1i(displayProgram.uniforms.uTexture, displayFBO.read.attach(0));
     Renderer.renderToFrameBuffer(displayFBO.write);
 
-    if (!SHOW_FLUID_SIMULATION) {
+    if (!shouldShowFluidSimulation.value) {
       shapeProgram.bind();
       gl.uniform1i(shapeProgram.uniforms.uTexture, displayFBO.read.attach(0));
       gl.uniform1i(shapeProgram.uniforms.uTextureLineShape, lineTexture.attach(1));
@@ -358,6 +358,10 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   }
   requestAnimationFrame(render);
 
+
+  return {
+    setShouldShowFluidSimulation: shouldShowFluidSimulation.set
+  }
 }
 
 

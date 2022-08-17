@@ -19,4 +19,14 @@ window.addEventListener("resize", () => {
 })
 
 
-const fluidGrid = createFluidGrid(canvas);
+const { setShouldShowFluidSimulation } = createFluidGrid(canvas);
+
+
+const showSimToggle = document.querySelector("#show-simulation") as HTMLInputElement;
+showSimToggle.addEventListener("change", (e) => {
+  if (showSimToggle.checked) {
+    setShouldShowFluidSimulation(true);
+  } else {
+    setShouldShowFluidSimulation(false);
+  }
+})
