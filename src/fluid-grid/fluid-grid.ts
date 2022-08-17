@@ -5,7 +5,7 @@
 import { createTimer } from "./utils";
 
 import BASE_VERT from "./shaders/BaseVertexShader.vert";
-import FLUID_FRAG from "./shaders/Fluid.frag";
+import NOISE_FRAG from "./shaders/Fluid.frag";
 import SHAPE_FRAG from "./shaders/ShapeShader.frag";
 import PIXELATE_FRAG from "./shaders/Pixelate.frag";
 
@@ -18,7 +18,8 @@ import FLUID_GRADIENT_SUBTRACT_FRAG from "./shaders/fluid/fluidGradientSubtract.
 import FLUID_PRESSURE_FRAG from "./shaders/fluid/fluidPressure.frag";
 import FLUID_SPLAT_FRAG from "./shaders/fluid/fluidSplat.frag";
 import FLUID_VORTICITY_FRAG from "./shaders/fluid/fluidVorticity.frag";
-
+import DISPLAY_FRAG from "./shaders/DisplayShader.frag";
+import COLOR_FRAG from "./shaders/fluid/Color.frag";
 
 
 import { compileShader, createProgram, Program } from "./WebGL/Program";
@@ -27,12 +28,39 @@ import { createDoubleFBO, createFBO, FrameBufferObject } from "./WebGL/FrameBuff
 import { getWebGLContext } from "./WebGL/getContext";
 import { createRenderer } from "./WebGL/Renderer";
 import { createTextureFromCanvas } from "./WebGL/Texture";
+import { Pointer } from "./WebGL/Pointer";
 
 interface RenderInfo {
   canvas: HTMLCanvasElement,
   gl: WebGLRenderingContext,
   delta: number,
   elapsedTime: number
+}
+
+function getResolution(gl: WebGLRenderingContext, resolution: number) {
+  let aspectRatio = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  if (aspectRatio < 1)
+    aspectRatio = 1.0 / aspectRatio;
+
+  let min = Math.round(resolution);
+  let max = Math.round(resolution * aspectRatio);
+
+  if (gl.drawingBufferWidth > gl.drawingBufferHeight)
+    return { width: max, height: min };
+  else
+    return { width: min, height: max };
+}
+
+function getTextureScale(texture: HTMLCanvasElement | HTMLImageElement, width: number, height: number) {
+  return {
+    x: width / texture.width,
+    y: height / texture.height
+  };
+}
+
+function scaleByPixelRatio(input: number) {
+  let pixelRatio = window.devicePixelRatio || 1;
+  return Math.floor(input * pixelRatio);
 }
 
 const createLineShape = () => {
@@ -61,47 +89,88 @@ const createDotShape = () => {
 }
 
 
-export const createFluidGrid = (canvas: HTMLCanvasElement) => {
+const SIM_RESOLUTION = 128;
+const createFrameBuffers = (gl: WebGLRenderingContext, ext) => {
+  const simRes = getResolution(gl, SIM_RESOLUTION);
 
-  // ================================================================
-  // for user input
-  const mousePos = {
-    x: 0,
-    y: 0
-  }
-  window.addEventListener("mousemove", (e) => {
-    mousePos.x = e.clientX;
-    mousePos.y = e.clientY;
-  })
-
-  // ================================================================
-
-  const { gl, ext } = getWebGLContext(canvas);
   const texType = ext.halfFloatTexType;
   const rgba = ext.formatRGBA;
   const rg = ext.formatRG;
   const r = ext.formatR;
   const filtering = ext.supportLinearFiltering ? gl.LINEAR : gl.NEAREST;
 
+  gl.disable(gl.BLEND);
 
+  // init rendering framebuffers
+  const velocityFBO = createDoubleFBO(gl, simRes.width, simRes.height, rg.internalFormat, rg.format, texType, filtering);
+  const divergenceFBO = createFBO(gl, simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+  const curlFBO = createFBO(gl, simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+  const pressureFBO = createDoubleFBO(gl, simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+
+  // init rendering FBO
+  const displayWidth = window.innerWidth;
+  const displayHeight = window.innerHeight;
+  const displayFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
+
+  return {
+    displayFBO,
+    pressureFBO,
+    curlFBO,
+    divergenceFBO,
+    velocityFBO
+  }
+}
+
+export const createFluidGrid = (canvas: HTMLCanvasElement) => {
+
+  const { gl, ext } = getWebGLContext(canvas);
+
+
+
+  // for rendering
   const baseVertexShader = compileShader(gl, gl.VERTEX_SHADER, BASE_VERT, []);
-  const fluidShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_FRAG, []);
+  const noiseShader = compileShader(gl, gl.FRAGMENT_SHADER, NOISE_FRAG, []);
   const pixelateShader = compileShader(gl, gl.FRAGMENT_SHADER, PIXELATE_FRAG, []);
   const shapeShader = compileShader(gl, gl.FRAGMENT_SHADER, SHAPE_FRAG, []);
+  const displayShader = compileShader(gl, gl.FRAGMENT_SHADER, DISPLAY_FRAG, []);
 
-  const fluidProgram = new Program(gl, baseVertexShader, fluidShader);
+  const noiseProgram = new Program(gl, baseVertexShader, noiseShader);
   const pixelateProgram = new Program(gl, baseVertexShader, pixelateShader);
   const shapeProgram = new Program(gl, baseVertexShader, shapeShader);
 
+  // for final output
+  const displayProgram = new Program(gl, baseVertexShader, displayShader);
+
+  // utilities
+  const clearShader = compileShader(gl, gl.FRAGMENT_SHADER, CLEAR_FRAG, []);
+  const colorShader = compileShader(gl, gl.FRAGMENT_SHADER, COLOR_FRAG, []);
+  const clearProgram = new Program(gl, baseVertexShader, clearShader);
+  const colorProgram = new Program(gl, baseVertexShader, colorShader);
+
+  // for fluid simulation
+  const splatShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_SPLAT_FRAG, []);
+  const advectionShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_ADVECTION_FRAG, ext.supportLinearFiltering ? [] : ['MANUAL_FILTERING']);
+  const divergenceShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_DIVERGENCE_FRAG, []);
+  const curlShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_CURL_FRAG, []);
+  const vorticityShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_VORTICITY_FRAG, []);
+  const pressureShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_PRESSURE_FRAG, []);
+  const gradientSubtractShader = compileShader(gl, gl.FRAGMENT_SHADER, FLUID_GRADIENT_SUBTRACT_FRAG, []);
+
+  const splatProgram = new Program(gl, baseVertexShader, splatShader);
+  const advectionProgram = new Program(gl, baseVertexShader, advectionShader);
+  const divergenceProgram = new Program(gl, baseVertexShader, divergenceShader);
+  const curlProgram = new Program(gl, baseVertexShader, curlShader);
+  const vorticityProgram = new Program(gl, baseVertexShader, vorticityShader);
+  const pressureProgram = new Program(gl, baseVertexShader, pressureShader);
+  const gradientSubtractProgram = new Program(gl, baseVertexShader, gradientSubtractShader);
 
   // Create Frame Buffers
-  const displayWidth = window.innerWidth;
-  const displayHeight = window.innerHeight;
-  const fluidFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
-  const pixelateFBO = createDoubleFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
   // const displayFBO = createFBO(gl, displayWidth, displayHeight, rgba.internalFormat, rgba.format, texType, gl.NEAREST);
 
+  const { displayFBO, curlFBO, velocityFBO, divergenceFBO, pressureFBO } = createFrameBuffers(gl, ext);
+
   const timer = createTimer();
+
   const { lineTexture, dotTexture } = (() => {
     const lineShape = createLineShape();
     const lineTexture = createTextureFromCanvas(gl, lineShape);
@@ -112,25 +181,164 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   })();
 
   const Renderer = createRenderer(gl);
+
+  let config = {
+    SIM_RESOLUTION: 128,
+    DENSITY_DISSIPATION: 1,
+    VELOCITY_DISSIPATION: 0.2,
+    PRESSURE: 0.8,
+    PRESSURE_ITERATIONS: 20,
+    CURL: 50,
+    SPLAT_RADIUS: 0.25,
+    SPLAT_FORCE: 6000
+  }
+
+  function correctRadius(radius: number) {
+    let aspectRatio = canvas.width / canvas.height;
+    if (aspectRatio > 1)
+      radius *= aspectRatio;
+    return radius;
+  }
+
+  function multipleSplats(amount) {
+    for (let i = 0; i < amount; i++) {
+      const x = Math.random();
+      const y = Math.random();
+      const dx = 1000 * (Math.random() - 0.5);
+      const dy = 1000 * (Math.random() - 0.5);
+      splat(x, y, dx, dy);
+    }
+  }
+
+  function splatPointer(pointer: Pointer) {
+    let dx = pointer.deltaX * config.SPLAT_FORCE;
+    let dy = pointer.deltaY * config.SPLAT_FORCE;
+    splat(pointer.texcoordX, pointer.texcoordY, dx, dy);
+  }
+
+  function splat(x, y, dx, dy) {
+    splatProgram.bind();
+    gl.uniform1i(splatProgram.uniforms.uTarget, velocityFBO.read.attach(0));
+    gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
+    gl.uniform2f(splatProgram.uniforms.point, x, y);
+    gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0.0);
+    gl.uniform1f(splatProgram.uniforms.radius, correctRadius(config.SPLAT_RADIUS / 100.0));
+    Renderer.renderToFrameBuffer(velocityFBO.write);
+    velocityFBO.swap();
+  }
+
+  const pointer = new Pointer();
+  window.addEventListener("mousemove", (e) => {
+    let posX = scaleByPixelRatio(e.clientX);
+    let posY = scaleByPixelRatio(e.clientY);
+
+    pointer.update(canvas, posX, posY);
+  })
+
+  function applyInputs() {
+    if (pointer.moved) {
+      pointer.moved = false;
+      splatPointer(pointer);
+    }
+  }
+
   const render = () => {
-    fluidProgram.bind()
-    gl.uniform1f(fluidProgram.uniforms.uTime, timer.getCurrentTime() / 1000);
-    gl.uniform2fv(fluidProgram.uniforms.uResolution, [window.innerWidth, window.innerHeight]);
-    gl.uniform2fv(fluidProgram.uniforms.uMouse, [mousePos.x, mousePos.y]);
 
-    Renderer.renderToFrameBuffer(fluidFBO.write);
-    fluidFBO.swap(); // flip it for the next stage in the pipeline
+    applyInputs();
 
-    // pixelateProgram.bind();
-    // gl.uniform1i(pixelateProgram.uniforms.uTexture, fluidFBO.read.attach(0)); // insert the data to the program
+    const delta = timer.getDeltaMillisec() / 1000;
 
-    // Renderer.renderToFrameBuffer(pixelateFBO.write);
-    // pixelateFBO.swap();
+    gl.disable(gl.BLEND);
 
-    shapeProgram.bind();
-    gl.uniform1i(shapeProgram.uniforms.uTexture, fluidFBO.read.attach(0));
-    gl.uniform1i(shapeProgram.uniforms.uTextureLineShape, lineTexture.attach(1));
-    gl.uniform1i(shapeProgram.uniforms.uTextureDotShape, dotTexture.attach(2));
+    curlProgram.bind();
+    gl.uniform2f(curlProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    gl.uniform1i(curlProgram.uniforms.uVelocity, velocityFBO.read.attach(0));
+
+    Renderer.renderToFrameBuffer(curlFBO);
+
+    vorticityProgram.bind();
+    gl.uniform2f(vorticityProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    gl.uniform1i(vorticityProgram.uniforms.uVelocity, velocityFBO.read.attach(0));
+    gl.uniform1i(vorticityProgram.uniforms.uCurl, curlFBO.attach(1));
+    gl.uniform1f(vorticityProgram.uniforms.curl, config.CURL);
+    gl.uniform1f(vorticityProgram.uniforms.dt, delta);
+
+    Renderer.renderToFrameBuffer(velocityFBO.write);
+    velocityFBO.swap();
+
+
+    divergenceProgram.bind();
+    gl.uniform2f(divergenceProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    gl.uniform1i(divergenceProgram.uniforms.uVelocity, velocityFBO.read.attach(0));
+
+    Renderer.renderToFrameBuffer(divergenceFBO);
+
+
+    clearProgram.bind();
+    gl.uniform1i(clearProgram.uniforms.uTexture, pressureFBO.read.attach(0));
+    gl.uniform1f(clearProgram.uniforms.value, config.PRESSURE);
+
+    Renderer.renderToFrameBuffer(pressureFBO.write);
+    pressureFBO.swap();
+
+    pressureProgram.bind();
+    gl.uniform2f(pressureProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    gl.uniform1i(pressureProgram.uniforms.uDivergence, divergenceFBO.attach(0));
+    for (let i = 0; i < config.PRESSURE_ITERATIONS; i++) {
+      gl.uniform1i(pressureProgram.uniforms.uPressure, pressureFBO.read.attach(1));
+      Renderer.renderToFrameBuffer(pressureFBO.write);
+      pressureFBO.swap();
+    }
+
+
+    gradientSubtractProgram.bind();
+    gl.uniform2f(gradientSubtractProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    gl.uniform1i(gradientSubtractProgram.uniforms.uPressure, velocityFBO.read.attach(0));
+    gl.uniform1i(gradientSubtractProgram.uniforms.uVelocity, velocityFBO.read.attach(1));
+
+    Renderer.renderToFrameBuffer(velocityFBO.write);
+    velocityFBO.swap();
+
+
+    advectionProgram.bind();
+    gl.uniform2f(advectionProgram.uniforms.texelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    if (!ext.supportLinearFiltering)
+      gl.uniform2f(advectionProgram.uniforms.dyeTexelSize, velocityFBO.texelSizeX, velocityFBO.texelSizeY);
+    let velocityId = velocityFBO.read.attach(0);
+    gl.uniform1i(advectionProgram.uniforms.uVelocity, velocityId);
+    gl.uniform1i(advectionProgram.uniforms.uSource, velocityId);
+    gl.uniform1f(advectionProgram.uniforms.dt, delta);
+    gl.uniform1f(advectionProgram.uniforms.dissipation, config.VELOCITY_DISSIPATION);
+    Renderer.renderToFrameBuffer(velocityFBO.write);
+    velocityFBO.swap();
+
+    // output to display program
+    if (!ext.supportLinearFiltering)
+      gl.uniform2f(advectionProgram.uniforms.dyeTexelSize, displayFBO.texelSizeX, displayFBO.texelSizeY);
+    gl.uniform1i(advectionProgram.uniforms.uVelocity, velocityFBO.read.attach(0));
+    gl.uniform1i(advectionProgram.uniforms.uSource, displayFBO.read.attach(1));
+    gl.uniform1f(advectionProgram.uniforms.dissipation, config.DENSITY_DISSIPATION);
+    Renderer.renderToFrameBuffer(displayFBO.write);
+    displayFBO.swap();
+
+    colorProgram.bind();
+    gl.uniform4f(colorProgram.uniforms.color, 0, 1, 0, 1);
+
+    displayProgram.bind();
+
+
+    // noiseProgram.bind()
+    // gl.uniform1f(noiseProgram.uniforms.uTime, timer.getCurrentTime() / 1000);
+    // gl.uniform2fv(noiseProgram.uniforms.uResolution, [window.innerWidth, window.innerHeight]);
+    // gl.uniform2fv(noiseProgram.uniforms.uMouse, [mousePos.x, mousePos.y]);
+
+    // Renderer.renderToFrameBuffer(noiseFBO.write);
+    // noiseFBO.swap(); // flip it for the next stage in the pipeline
+
+    // shapeProgram.bind();
+    // gl.uniform1i(shapeProgram.uniforms.uTexture, noiseFBO.read.attach(0));
+    // gl.uniform1i(shapeProgram.uniforms.uTextureLineShape, lineTexture.attach(1));
+    // gl.uniform1i(shapeProgram.uniforms.uTextureDotShape, dotTexture.attach(2));
 
     // render it to screen
     Renderer.renderToScreen();

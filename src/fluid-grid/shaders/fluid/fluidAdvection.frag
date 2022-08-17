@@ -7,6 +7,7 @@ uniform vec2 texelSize;
 uniform vec2 dyeTexelSize;
 uniform float dt;
 uniform float dissipation;
+
 vec4 bilerp (sampler2D sam, vec2 uv, vec2 tsize) {
     vec2 st = uv / tsize - 0.5;
     vec2 iuv = floor(st);
@@ -17,6 +18,7 @@ vec4 bilerp (sampler2D sam, vec2 uv, vec2 tsize) {
     vec4 d = texture2D(sam, (iuv + vec2(1.5, 1.5)) * tsize);
     return mix(mix(a, b, fuv.x), mix(c, d, fuv.x), fuv.y);
 }
+
 void main () {
 #ifdef MANUAL_FILTERING
     vec2 coord = vUv - dt * bilerp(uVelocity, vUv, texelSize).xy * texelSize;
@@ -27,4 +29,4 @@ void main () {
 #endif
     float decay = 1.0 + dissipation * dt;
     gl_FragColor = result / decay;
-}`,
+}

@@ -86,7 +86,7 @@ export function createTimer() {
   let initial = Date.now();
   let lastUpdate = Date.now();
   return {
-    getDelta: () => {
+    getDeltaMillisec: () => {
       const newTime = Date.now();
       const delta = newTime - lastUpdate;
       lastUpdate = newTime;
