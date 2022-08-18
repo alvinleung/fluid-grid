@@ -34,14 +34,18 @@ import { makeNoise2D } from "fast-simplex-noise";
 const config = {
   SIM_RESOLUTION: 128, // default 128
   DISPLAY_RESOLUTION: 1024, // default 1024
-  DENSITY_DISSIPATION: 1, // default 1
+  DENSITY_DISSIPATION: 5, // default 1
   VELOCITY_DISSIPATION: 0.2,// default .2
-  PRESSURE: 0.8, // default .8
-  PRESSURE_ITERATIONS: 10, // default 20
-  CURL: 10, // default 30
+  PRESSURE: 0.05, // default .8
+  PRESSURE_ITERATIONS: 20, // default 20
+  CURL: 30, // default 30
   SPLAT_RADIUS: .6, //default 0.25
   SPLAT_FORCE: 6000 //default 6000
 }
+
+const BLOB_MOVEMENT_TIME_FACTOR = .5;
+const SIMULATION_TIME_FACTOR = .1;
+
 
 function getResolution(gl: WebGLRenderingContext, resolution: number) {
   let aspectRatio = gl.drawingBufferWidth / gl.drawingBufferHeight;
@@ -274,7 +278,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   function applyInputs(time: number) {
 
-    const timeFactor = time * .035;
+    const timeFactor = time * BLOB_MOVEMENT_TIME_FACTOR;
 
     let erraticFactorX = noise(timeFactor, timeFactor);
     let erraticFactorY = noise(timeFactor + 1000, timeFactor + 1000);
@@ -284,12 +288,12 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
     selfMovePointer.update(canvas, window.innerWidth * selfMovePointerX, window.innerHeight * selfMovePointerY);
 
-    const movementThreshold = 0.0005;
-    const movementAmount = selfMovePointer.deltaX + selfMovePointer.deltaY;
+    // const movementThreshold = 0.0005;
+    // const movementAmount = selfMovePointer.deltaX + selfMovePointer.deltaY;
 
-    if (Math.abs(movementAmount) > Math.abs(movementThreshold)) {
-      splatPointer(selfMovePointer);
-    }
+    // if (Math.abs(movementAmount) > Math.abs(movementThreshold)) {
+    splatPointer(selfMovePointer);
+    // }
 
     if (pointer.moved) {
       pointer.moved = false;
@@ -307,8 +311,8 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   const render = () => {
 
-    const delta = timer.getDeltaMillisec() / 1000;
-    const time = timer.getCurrentTime() / 1000;
+    const delta = (timer.getDeltaMillisec() / 1000) * SIMULATION_TIME_FACTOR;
+    const time = (timer.getCurrentTime() / 1000) * SIMULATION_TIME_FACTOR;
 
     applyInputs(time);
 
