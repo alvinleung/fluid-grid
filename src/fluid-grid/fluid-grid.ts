@@ -304,7 +304,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   setTimeout(() => multipleSplats(60), 10);
 
   setInterval(() => {
-    splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
+    multipleSplats(1);
   }, 1000)
 
   const shouldShowFluidSimulation = state(false);
