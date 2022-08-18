@@ -230,8 +230,8 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     for (let i = 0; i < amount; i++) {
       const x = Math.random();
       const y = Math.random();
-      const dx = 10000 * (Math.random() - 0.5);
-      const dy = 10000 * (Math.random() - 0.5);
+      const dx = config.SPLAT_FORCE * (Math.random() - 0.5);
+      const dy = config.SPLAT_FORCE * (Math.random() - 0.5);
       splat(x, y, dx, dy);
     }
   }
@@ -301,7 +301,7 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     }
   }
 
-  multipleSplats(20);
+  setTimeout(() => multipleSplats(60), 10);
 
   setInterval(() => {
     splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
