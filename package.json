@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/alvinleung/fluid-grid#readme",
   "dependencies": {
+    "fast-simplex-noise": "^4.0.0",
     "parcel": "^2.7.0",
     "twgl.js": "^4.24.0"
   },

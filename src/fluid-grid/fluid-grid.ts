@@ -29,6 +29,7 @@ import { getWebGLContext } from "./WebGL/getContext";
 import { createRenderer } from "./WebGL/Renderer";
 import { createTextureFromCanvas } from "./WebGL/Texture";
 import { Pointer } from "./WebGL/Pointer";
+import { makeNoise2D } from "fast-simplex-noise";
 
 const config = {
   SIM_RESOLUTION: 128, // default 128
@@ -225,8 +226,8 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
     for (let i = 0; i < amount; i++) {
       const x = Math.random();
       const y = Math.random();
-      const dx = 1000 * (Math.random() - 0.5);
-      const dy = 1000 * (Math.random() - 0.5);
+      const dx = 10000 * (Math.random() - 0.5);
+      const dy = 10000 * (Math.random() - 0.5);
       splat(x, y, dx, dy);
     }
   }
@@ -259,18 +260,44 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
   }
 
   const pointer = new Pointer();
+  const selfMovePointer = new Pointer();
+
   window.addEventListener("mousemove", (e) => {
     let posX = (e.clientX);
     let posY = (e.clientY);
     pointer.update(canvas, posX, posY);
-  })
+  });
 
-  function applyInputs() {
+  const noise = makeNoise2D();
+  let selfMovePointerX = 0;
+  let selfMovePointerY = 0;
+
+  function applyInputs(time: number) {
+
+    const timeFactor = time * .035;
+
+    let erraticFactorX = noise(timeFactor, timeFactor);
+    let erraticFactorY = noise(timeFactor + 1000, timeFactor + 1000);
+
+    selfMovePointerX = (noise((timeFactor + erraticFactorX), timeFactor) + 1) / 2;
+    selfMovePointerY = (noise(timeFactor, (timeFactor + erraticFactorY)) + 1) / 2;
+
+    selfMovePointer.update(canvas, window.innerWidth * selfMovePointerX, window.innerHeight * selfMovePointerY);
+
+    const movementThreshold = 0.0005;
+    const movementAmount = selfMovePointer.deltaX + selfMovePointer.deltaY;
+
+    if (Math.abs(movementAmount) > Math.abs(movementThreshold)) {
+      splatPointer(selfMovePointer);
+    }
+
     if (pointer.moved) {
       pointer.moved = false;
       splatPointer(pointer);
     }
   }
+
+  multipleSplats(20);
 
   setInterval(() => {
     splat(Math.random(), Math.random(), Math.random() * config.SPLAT_FORCE, Math.random() * config.SPLAT_FORCE);
@@ -280,9 +307,10 @@ export const createFluidGrid = (canvas: HTMLCanvasElement) => {
 
   const render = () => {
 
-    applyInputs();
-
     const delta = timer.getDeltaMillisec() / 1000;
+    const time = timer.getCurrentTime() / 1000;
+
+    applyInputs(time);
 
     gl.disable(gl.BLEND);
 
